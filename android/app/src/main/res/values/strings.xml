@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Protocolix</string>
+    <string name="title_activity_main">Protocolix</string>
+    <string name="package_name">io.ipi.protocolix</string>
+    <string name="custom_url_scheme">io.ipi.protocolix</string>
+</resources>

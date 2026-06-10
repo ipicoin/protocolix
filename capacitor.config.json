@@ -1,0 +1,10 @@
+{
+  "appId": "io.ipi.protocolix",
+  "appName": "Protocolix",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false
+    }
+  }
+}
