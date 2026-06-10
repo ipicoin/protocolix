@@ -1,11 +1,12 @@
 {
-  "name": "capacitor-app",
-  "version": "1.0.0",
-  "description": "An Amazing Capacitor App",
+  "name": "protocolix",
+  "version": "0.1.0",
+  "description": "An Amazing Wallet App for handy management of assets inside cosmos sdk",
   "type": "module",
   "keywords": [
     "capacitor",
-    "mobile"
+    "mobile",
+    "ipi"
   ],
   "scripts": {
     "start": "vite",
@@ -30,6 +31,8 @@
     "vite": "^7.3.1",
     "vitest": "^4.1.8"
   },
-  "author": "",
-  "license": "ISC"
+  "authors": [
+    "Sett Sarverott <sett@sarverott.com>"
+  ],
+  "license": "CC-BY-NC-SA-4.0"
 }
