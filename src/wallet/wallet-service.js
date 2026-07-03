@@ -36,7 +36,7 @@
 
 /** @type {ChainConfig} */
 export const DEFAULT_CHAIN_CONFIG = {
-	chainId: "ipi-mainnet-1",
+	chainId: "ipi-mainnet-2",
 	rpcUrl: "https://ipicoin.eu/rpc",
 	addressPrefix: "ipi",
 	denom: "nipi",

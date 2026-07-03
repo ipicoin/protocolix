@@ -30,7 +30,7 @@ cienkim adapterem, który:
 
 | pole            | wartość                     | opis                                  |
 | --------------- | --------------------------- | ------------------------------------- |
-| `chainId`       | `ipi-mainnet-1`             | identyfikator łańcucha (do potw.)     |
+| `chainId`       | `ipi-mainnet-2`             | identyfikator łańcucha (SSOT)          |
 | `rpcUrl`        | `https://ipicoin.eu/rpc`    | endpoint RPC                          |
 | `addressPrefix` | `ipi`                       | prefiks bech32 adresów (`ipi1...`)    |
 | `denom`         | `nipi`                      | denominacja bazowa (najmniejsza)      |
