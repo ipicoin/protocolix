@@ -2,43 +2,63 @@
  * wallet-service.js — Fala 3: warstwa integracji mobile <-> wallet-core.
  *
  * Ten serwis jest CIENKIM adapterem. Cała logika kryptograficzna (mnemonik,
- * derywacja kluczy, podpisywanie transakcji) należy do SSOT: `wallet-core.js`
- * publikowanego jako pakiet `@ipicoin/wallet-core`.
+ * derywacja kluczy, podpisywanie i broadcast transakcji) należy do SSOT:
+ * `wallet-core.js` publikowanego jako pakiet `@ipicoin/wallet-core`.
+ *
+ * REALNY surface wallet-core (default export):
+ *   import walletCore from "@ipicoin/wallet-core";
+ *   const { Operations, Models } = walletCore;
+ *   Operations.generateWalletKey()            -> cosmjs DirectSecp256k1HdWallet
+ *   Operations.importWalletByMnemonic(mnemo)  -> cosmjs DirectSecp256k1HdWallet
+ *   Operations.sendAmount(fromWallet, toAddress, tokenAmount, chainConfig, message?, feeCalc?)
+ *        -> SAM podpisuje i broadcastuje (SigningStargateClient.sendTokens)
+ *
+ * Uwagi wynikające z realnego API:
+ *  - portfel to obiekt cosmjs — NIE ma metody `getAddress()`; adres pobiera się
+ *    przez `(await wallet.getAccounts())[0].address`,
+ *  - `generateWalletKey()` sam generuje 24-słowny mnemonik (parametr entropii
+ *    jest po stronie rdzenia); mnemonik odczytujemy z `wallet.mnemonic`,
+ *  - `sendAmount(...)` nie zwraca osobnego "signed tx" do ręcznego broadcastu —
+ *    całość dzieje się w rdzeniu; my tylko przekazujemy argumenty i czytamy hash.
  *
  * Dopóki pakiet nie jest opublikowany, ten plik działa w trybie STUB:
  *  - eksponuje stabilny kontrakt API dla ekranów (src/screens/*),
- *  - waliduje wejścia i buduje zapytania RPC,
- *  - w miejscach zależnych od kryptografii rzuca czytelny błąd `WalletCoreNotLinked`.
- *
- * Gdy `@ipicoin/wallet-core` będzie dostępny, wystarczy podmienić import
- * (patrz TODO poniżej) — kontrakt tej klasy pozostaje bez zmian.
+ *  - saldo (odczyt) działa bez rdzenia — przez LCD (REST) łańcucha,
+ *  - operacje zależne od kryptografii rzucają `WalletCoreNotLinked`.
  */
 
 /**
- * TODO(fala3): po publikacji pakietu odkomentuj poniższy import i usuń stub.
+ * TODO(fala3): po publikacji pakietu odkomentuj import i zwróć go w loadWalletCore().
  *
- *   import * as walletCore from "@ipicoin/wallet-core";
+ *   import walletCore from "@ipicoin/wallet-core";
  *
- * Do czasu publikacji `loadWalletCore()` zwraca stub, który sygnalizuje,
- * że rdzeń kryptograficzny nie jest jeszcze spięty.
+ * Do czasu publikacji `loadWalletCore()` zwraca null, co sygnalizuje, że rdzeń
+ * kryptograficzny nie jest jeszcze spięty (STUB). Kontrakt tej klasy się nie zmienia.
  */
 
 /**
  * Konfiguracja łańcucha IPI (SSOT dla parametrów sieci).
  * @typedef {Object} ChainConfig
  * @property {string} chainId       Identyfikator łańcucha (cosmos sdk).
- * @property {string} rpcUrl        Endpoint RPC.
+ * @property {string} rpcUrl        Endpoint Tendermint RPC (JSON-RPC) — używany przez rdzeń do broadcastu.
+ * @property {string} restUrl       Endpoint LCD (REST, cosmos-sdk gRPC-gateway) — używany do odczytu sald.
  * @property {string} addressPrefix Prefiks bech32 adresów.
  * @property {string} denom         Denominacja bazowa (najmniejsza jednostka).
- * @property {string} displayDenom  Denominacja prezentacyjna.
+ * @property {string} displayDenom  Denominacja prezentacyjna (ticker widoczny).
  * @property {number} decimals      Liczba miejsc po przecinku (denom -> display).
  */
 
 /** @type {ChainConfig} */
 export const DEFAULT_CHAIN_CONFIG = {
 	chainId: "ipi-mainnet-2",
+	// Tendermint RPC (JSON-RPC): abci_query / broadcast_tx_sync. Broadcast idzie
+	// przez rdzeń (SigningStargateClient) — nie budujemy własnych ścieżek REST na RPC.
 	rpcUrl: "https://ipicoin.eu/rpc",
+	// LCD / REST (cosmos-sdk): /cosmos/bank/v1beta1/balances/{addr} itd.
+	// TODO(fala3): potwierdzić realny endpoint LCD z infrastrukturą IPI.
+	restUrl: "https://ipicoin.eu/lcd",
 	addressPrefix: "ipi",
+	// Denom bazowy (base). Ticker widoczny to IPI (uppercase) — patrz displayDenom.
 	denom: "nipi",
 	displayDenom: "IPI",
 	// 1 IPI = 10^9 nipi (nano-IPI). TODO(fala3): potwierdzić z chain genesis.
@@ -58,7 +78,9 @@ export class WalletCoreNotLinked extends Error {
 
 /**
  * Ładuje rdzeń wallet-core. Stub do czasu publikacji pakietu.
- * @returns {object|null} moduł wallet-core albo null gdy niespięty.
+ * Po odkomentowaniu importu na górze pliku ma zwracać `walletCore`
+ * (default export z polami `Operations` i `Models`).
+ * @returns {{Operations:object, Models:object}|null} moduł wallet-core albo null gdy niespięty.
  */
 function loadWalletCore() {
 	// TODO(fala3): return walletCore; — po odkomentowaniu importu na górze pliku.
@@ -78,8 +100,9 @@ export class WalletService {
 		/** @type {ChainConfig} */
 		this.chainConfig = { ...DEFAULT_CHAIN_CONFIG, ...(opts.chainConfig || {}) };
 		this.storage = opts.storage || null;
+		/** @type {{Operations:object, Models:object}|null} */
 		this.core = loadWalletCore();
-		/** @type {?object} bieżący portfel w pamięci (adres + uchwyt do rdzenia). */
+		/** @type {?object} bieżący portfel cosmjs (DirectSecp256k1HdWallet). */
 		this.wallet = null;
 	}
 
@@ -89,46 +112,53 @@ export class WalletService {
 	}
 
 	/**
-	 * Tworzy nowy portfel (generuje mnemonik przez wallet-core).
-	 * @param {object} [opts]
-	 * @param {number} [opts.strength=256] entropia mnemonika (12 słów=128, 24=256).
-	 * @returns {Promise<{address:string, mnemonic:string}>}
+	 * Zwraca `Operations` z rdzenia albo rzuca WalletCoreNotLinked.
+	 * @param {string} operation nazwa operacji (do komunikatu błędu).
+	 * @returns {object}
 	 */
-	async createWallet({ strength = 256 } = {}) {
-		if (!this.core) throw new WalletCoreNotLinked("createWallet");
-		// TODO(fala3): const mnemonic = this.core.generateMnemonic(strength);
-		//             return this.restore(mnemonic);
-		const mnemonic = this.core.generateMnemonic(strength);
-		return this.restore(mnemonic);
+	#ops(operation) {
+		if (!this.core || !this.core.Operations) throw new WalletCoreNotLinked(operation);
+		return this.core.Operations;
 	}
 
 	/**
-	 * Odtwarza portfel z mnemonika.
+	 * Tworzy nowy portfel. Rdzeń (`Operations.generateWalletKey`) sam generuje
+	 * 24-słowny mnemonik — zwracamy go do bezpiecznego zapisania przez warstwę UI.
+	 * @returns {Promise<{address:string, mnemonic:string}>}
+	 */
+	async createWallet() {
+		const ops = this.#ops("createWallet");
+		// generateWalletKey() -> cosmjs DirectSecp256k1HdWallet (sam derywuje mnemonik).
+		this.wallet = await ops.generateWalletKey();
+		const mnemonic = this.wallet.mnemonic;
+		return { address: await this.getAddress(), mnemonic };
+	}
+
+	/**
+	 * Odtwarza portfel z mnemonika przez rdzeń.
 	 * @param {string} mnemonic 12/24 słowa BIP39.
 	 * @returns {Promise<{address:string}>}
 	 */
 	async restore(mnemonic) {
-		if (!this.core) throw new WalletCoreNotLinked("restore");
+		const ops = this.#ops("restore");
 		if (typeof mnemonic !== "string" || mnemonic.trim().split(/\s+/).length < 12) {
 			throw new Error("Nieprawidłowy mnemonik (oczekiwano 12 lub 24 słów).");
 		}
-		// TODO(fala3): this.wallet = await this.core.walletFromMnemonic(mnemonic, {
-		//                 prefix: this.chainConfig.addressPrefix,
-		//              });
-		this.wallet = await this.core.walletFromMnemonic(mnemonic, {
-			prefix: this.chainConfig.addressPrefix,
-		});
+		// importWalletByMnemonic(mnemonic) -> cosmjs DirectSecp256k1HdWallet.
+		this.wallet = await ops.importWalletByMnemonic(mnemonic.trim());
 		return { address: await this.getAddress() };
 	}
 
 	/**
 	 * Zwraca adres bech32 z prefiksem `ipi`.
+	 * Portfel cosmjs NIE ma `getAddress()` — adres przez getAccounts().
 	 * @returns {Promise<string>}
 	 */
 	async getAddress() {
 		if (!this.wallet) throw new Error("Brak aktywnego portfela — użyj createWallet/restore.");
-		// TODO(fala3): return this.wallet.getAddress();
-		const address = await this.wallet.getAddress();
+		const accounts = await this.wallet.getAccounts();
+		const address = accounts && accounts[0] && accounts[0].address;
+		if (!address) throw new Error("Portfel nie zwrócił żadnego konta.");
 		if (!address.startsWith(`${this.chainConfig.addressPrefix}1`)) {
 			throw new Error(`Adres nie ma oczekiwanego prefiksu "${this.chainConfig.addressPrefix}".`);
 		}
@@ -136,18 +166,28 @@ export class WalletService {
 	}
 
 	/**
-	 * Pobiera saldo z RPC dla podanego (lub aktywnego) adresu.
-	 * Zapytanie balance nie wymaga rdzenia kryptograficznego — to zwykły odczyt RPC.
+	 * Pobiera saldo przez LCD (REST) łańcucha — czysty odczyt, bez rdzenia.
+	 * GET {restUrl}/cosmos/bank/v1beta1/balances/{addr}
 	 * @param {string} [address] domyślnie adres aktywnego portfela.
 	 * @returns {Promise<{denom:string, amount:string, display:string}>}
 	 */
 	async getBalance(address) {
 		const addr = address || (await this.getAddress());
-		const result = await this.#rpc("bank/balance", {
-			address: addr,
-			denom: this.chainConfig.denom,
+		const base = this.chainConfig.restUrl.replace(/\/$/, "");
+		const url = `${base}/cosmos/bank/v1beta1/balances/${encodeURIComponent(addr)}`;
+		// TODO(fala3): rozważyć @capacitor/http dla natywnego stosu sieciowego.
+		const res = await fetch(url, {
+			method: "GET",
+			headers: { accept: "application/json" },
 		});
-		const amount = (result && result.balance && result.balance.amount) || "0";
+		if (!res.ok) {
+			throw new Error(`LCD balances zwróciło HTTP ${res.status}`);
+		}
+		const data = await res.json();
+		// Kształt: { balances: [{ denom, amount }, ...], pagination: {...} }
+		const balances = (data && data.balances) || [];
+		const entry = balances.find((b) => b && b.denom === this.chainConfig.denom);
+		const amount = (entry && entry.amount) || "0";
 		return {
 			denom: this.chainConfig.denom,
 			amount: String(amount),
@@ -157,15 +197,16 @@ export class WalletService {
 
 	/**
 	 * Wysyła środki (nipi) na adres odbiorcy.
-	 * Wymaga rdzenia (podpisanie transakcji), transmisja przez RPC.
+	 * Rdzeń (`Operations.sendAmount`) SAM podpisuje i broadcastuje transakcję —
+	 * nie ma osobnego kroku "zwróć signed tx i wyślij przez RPC".
 	 * @param {object} params
 	 * @param {string} params.to      adres odbiorcy (ipi1...).
 	 * @param {string|number} params.amount kwota w `nipi` (najmniejsza jednostka).
-	 * @param {string} [params.memo]  opcjonalne memo.
+	 * @param {string} [params.memo]  opcjonalne memo/wiadomość.
 	 * @returns {Promise<{txHash:string}>}
 	 */
 	async send({ to, amount, memo = "" }) {
-		if (!this.core) throw new WalletCoreNotLinked("send");
+		const ops = this.#ops("send");
 		if (!this.wallet) throw new Error("Brak aktywnego portfela — użyj createWallet/restore.");
 		if (typeof to !== "string" || !to.startsWith(`${this.chainConfig.addressPrefix}1`)) {
 			throw new Error("Nieprawidłowy adres odbiorcy.");
@@ -174,20 +215,14 @@ export class WalletService {
 		if (!/^\d+$/.test(amt) || amt === "0") {
 			throw new Error("Kwota musi być dodatnią liczbą całkowitą w nipi.");
 		}
-		// TODO(fala3): const signedTx = await this.core.signSend(this.wallet, {
-		//                 to, amount: amt, denom: this.chainConfig.denom,
-		//                 chainId: this.chainConfig.chainId, memo,
-		//              });
-		//              const res = await this.#rpc("tx/broadcast", { tx: signedTx });
-		const signedTx = await this.core.signSend(this.wallet, {
-			to,
-			amount: amt,
-			denom: this.chainConfig.denom,
-			chainId: this.chainConfig.chainId,
-			memo,
-		});
-		const res = await this.#rpc("tx/broadcast", { tx: signedTx });
-		return { txHash: (res && res.txhash) || "" };
+		// sendAmount(fromWallet, toAddress, tokenAmount, chainConfig, message?, feeCalc?)
+		// — rdzeń używa chainConfig.denom + rpcUrl (SigningStargateClient), podpisuje i broadcastuje.
+		const result = memo
+			? await ops.sendAmount(this.wallet, to, amt, this.chainConfig, memo)
+			: await ops.sendAmount(this.wallet, to, amt, this.chainConfig);
+		// cosmjs sendTokens -> DeliverTxResponse.transactionHash
+		const txHash = (result && (result.transactionHash || result.txHash || result.txhash)) || "";
+		return { txHash };
 	}
 
 	/**
@@ -212,26 +247,6 @@ export class WalletService {
 		const [whole, frac = ""] = String(displayAmount).split(".");
 		const fracPadded = frac.padEnd(this.chainConfig.decimals, "0").slice(0, this.chainConfig.decimals);
 		return String(BigInt(`${whole}${fracPadded}`));
-	}
-
-	/**
-	 * Minimalny klient RPC POST (JSON). Zastąpi go klient z ipi-rpc gdy dojrzeje.
-	 * @param {string} path ścieżka względem rpcUrl.
-	 * @param {object} body ładunek JSON.
-	 * @returns {Promise<object>}
-	 */
-	async #rpc(path, body) {
-		const url = `${this.chainConfig.rpcUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
-		// TODO(fala3): rozważyć @capacitor/http dla natywnego stosu sieciowego.
-		const res = await fetch(url, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify(body),
-		});
-		if (!res.ok) {
-			throw new Error(`RPC ${path} zwróciło HTTP ${res.status}`);
-		}
-		return res.json();
 	}
 }
 
