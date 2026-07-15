@@ -1,7 +1,7 @@
 {
   "name": "protocolix",
   "version": "0.1.0",
-  "description": "An Amazing Wallet App for handy management of assets inside cosmos sdk",
+  "description": "Experimental Capacitor and Vue mobile-wallet shell for IPI protocol research.",
   "type": "module",
   "keywords": [
     "capacitor",
@@ -38,7 +38,7 @@
     "vitest": "^4.1.8"
   },
   "authors": [
-    "Sett Sarverott <sett@sarverott.com>"
+    "IPI contributors"
   ],
-  "license": "CC-BY-SA-4.0"
+  "license": "Apache-2.0"
 }
