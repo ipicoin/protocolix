@@ -29,10 +29,6 @@
 name: SonarCloud analysis
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -40,6 +36,7 @@ permissions:
 
 jobs:
   Analysis:
+    if: vars.SONARCLOUD_ENABLED == 'true'
     runs-on: ubuntu-latest
 
     steps:
