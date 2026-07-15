@@ -1,3 +1,2 @@
-#npm test
+npm test -- --run --passWithNoTests
 npm run build
-npm run sync
