@@ -1,3 +1,1 @@
-#npm run build
-#npm run sync
-git push
+# Intentionally empty. Commits must never push or publish automatically.
