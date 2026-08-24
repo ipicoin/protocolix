@@ -1,53 +1,57 @@
 # Protocolix
 
-An experimental Capacitor and Vue mobile-wallet shell for IPI protocol research.
+Capacitor application scaffold for a future IPI mobile wallet, with checked-in
+Android and iOS projects and a small browser shell.
 
-> **Status: pre-alpha.** Protocolix is not a production wallet. Key storage,
-> transaction review, chain identity, recovery, device integrity, supply-chain
-> security, and release signing have not been documented or audited for real
-> assets.
+## What the source implements
 
-## Current scope
+- Capacitor 8 projects for Android and iOS;
+- IPI application identifiers and native launch assets;
+- a Vite-built web shell; and
+- the default Capacitor camera demonstration.
 
-The repository provides a cross-platform application shell with Capacitor
-targets for Android and iOS. It is a place to prototype wallet interactions,
-including research around hardware-backed P-256/R1 keys and NFC-assisted flows.
-Those experiments do not establish that a device, NFC tag, or transaction path
-is secure.
-
-Relevant background material includes:
-
-- [Chainway R1 product information](https://chainway.us/Products/Info/135); and
-- research on asymmetric cryptography in security-enabled NFC tags
-  ([publication](https://www.researchgate.net/publication/260655435_Security-Enabled_Near-Field_Communication_Tag_With_Flexible_Architecture_Supporting_Asymmetric_Cryptography)).
-
-External links are research inputs, not endorsements or security attestations.
+The current application does **not** implement accounts, key generation or
+storage, chain identity, balances, transaction construction, signing, recovery,
+NFC, secure-element access, or an IPI network connection. The repository name
+and native targets describe its intended integration role, not completed wallet
+behavior.
 
 ## Development
+
+The current dependency graph requires Node.js `^20.19.0` or `>=22.12.0`; the
+verified audit environment used Node 24.
 
 ```sh
 npm install
 npm start
-npm test
 npm run build
-```
-
-After adding or changing native plugins, synchronize platform projects with:
-
-```sh
 npm run sync
 ```
 
+`npm run build` currently produces the web bundle. `npm run sync` copies web
+assets and plugin configuration into the native projects after dependencies are
+installed. There is no application test suite yet; the generated native example
+tests do not exercise wallet behavior.
+
+## Intended integration boundary
+
+Protocolix is expected to consume a separately reviewed wallet/key layer and to
+present network identity, signer intent, messages, fees, and recovery behavior
+before it can become a wallet. Research around P-256/R1, WebAuthn, NFC, or
+hardware-backed keys belongs behind explicit platform interfaces and threat
+models; adding a plugin is not evidence that those paths are secure.
+
+## Development status
+
+**Prototype scaffold.** The web shell builds, but this is not a wallet release
+and must not be used to protect assets. A supported release requires implemented
+wallet behavior, deterministic tests, secure storage and recovery design,
+dependency review, protected release signing, migration procedures, and an
+independent security assessment.
+
 Never commit signing keys, recovery phrases, API secrets, or production wallet
-material. Security-sensitive findings must use the private reporting process in
-the organization [security policy](https://github.com/ipicoin/.github/blob/main/SECURITY.md).
-
-## Release requirements
-
-A real wallet release requires, at minimum, a reviewed threat model, explicit
-chain and transaction displays, deterministic builds where the platform allows
-them, protected release signing, recovery and migration tests, dependency
-review, independent security assessment, and a public support lifecycle.
+material. Report security-sensitive findings through the organization
+[security policy](https://github.com/ipicoin/.github/blob/main/SECURITY.md).
 
 ## License
 
