@@ -1,7 +1,10 @@
 {
   "name": "protocolix",
   "version": "0.1.0",
-  "description": "Experimental Capacitor and Vue mobile-wallet shell for IPI protocol research.",
+  "description": "Capacitor Android/iOS application scaffold for future IPI wallet integration.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "type": "module",
   "keywords": [
     "capacitor",
