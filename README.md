@@ -18,8 +18,8 @@ behavior.
 
 ## Development
 
-The current dependency graph requires Node.js `^20.19.0` or `>=22.12.0`; the
-verified audit environment used Node 24.
+The current Capacitor and Vite dependency graph requires Node.js `>=22.12.0`;
+the verified audit environment used Node 24.
 
 ```sh
 npm install

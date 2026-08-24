@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Capacitor Android/iOS application scaffold for future IPI wallet integration.",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   },
   "type": "module",
   "keywords": [
