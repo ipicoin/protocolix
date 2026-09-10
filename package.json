@@ -38,7 +38,7 @@
     "husky": "^9.1.7",
     "octokit": "^5.0.5",
     "vite": "^7.3.6",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "authors": [
     "IPI contributors"
